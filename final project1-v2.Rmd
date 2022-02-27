@@ -1,0 +1,1086 @@
+---
+title: "final project1-v2"
+author: "Yutong Ma"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+#Part1-Data Preprocessing
+```{r}
+#step1-read csv
+Seed1data <- read.csv("F:/MLdata/Training Data for Ag Project.csv")
+Evaluation_data<-read.csv("F:/MLdata/Evaluation dataset for Ag Project.csv")
+head(Seed1data,n=6L)
+```
+
+```{r}
+#step2-keep all the variables in the training set
+
+keepvars = c("GrowingSeason","Location","Genetics","Experiment","Latitude","Longitude","Variety","Variety_Yield","Commercial_Yield","Yield_Difference","Location_Yield","RelativeMaturity","Weather1","Weather2","Probability","RelativeMaturity25","Prob_IRR","Soil_Type","Temp_03","Temp_04","Temp_05","Temp_06","Temp_07","Temp_08","Temp_09","Median_Temp","Prec_03","Prec_04","Prec_05","Prec_06","Prec_07","Prec_08","Prec_09","Median_Prec","Rad_03","Rad_04","Rad_05","Rad_06","Rad_07","Rad_08","Rad_09","Median_Rad","Density","Acres","PH1","AWC1","Clay1","Silt1","Sand1","Sand2","Silt2","Clay2","PH2","CEC","CE")
+length(keepvars)
+dim(Seed1data)
+```
+
+```{r}
+#step3-choose the variables we need:delete "Location", "Experiment", "Commercial_Yield", "Yield_Difference", "Location_Yield", "Weather1", "Weather2","Temp_03", "Temp_04", "Temp_05", "Temp_06", "Temp_07", "Temp_08", "Temp_09", "Prec_03", "Prec_04", "Prec_05", "Prec_06", "Prec_07", "Prec_08", "Prec_09", "Rad_03", "Rad_04", "Rad_05", "Rad_06", "Rad_07", "Rad_08", "Rad_09","CE","Genetics","RelativeMaturity"
+
+use_vars=c("GrowingSeason","Latitude","Longitude","Variety","Variety_Yield","Probability","RelativeMaturity25","Prob_IRR","Soil_Type","Median_Temp","Median_Prec","Median_Rad","Density","Acres","PH1","AWC1","Clay1","Silt1","Sand1","Sand2","Silt2","Clay2","PH2","CEC")
+length(use_vars)
+```
+
+```{r}
+#step4-build the new train set based on step3
+
+seeddata=Seed1data[,use_vars]
+dim(seeddata)
+```
+
+```{r}
+#step5-delete rows that contains NA
+
+seeddata = seeddata[complete.cases(seeddata),]
+dim(seeddata)
+```
+
+```{r}
+#step6-transform categorial variables into factor
+
+seeddata[,"Variety"] = factor(seeddata[,"Variety"])
+seeddata[,"Soil_Type"] = factor(seeddata[,"Soil_Type"])
+
+str(seeddata)
+```
+
+
+#Part2-Descriptive Analysis
+```{r}
+#step1-map
+
+library(ggplot2)
+library(ggmap)
+library(sp)
+library(maptools)
+library(maps)
+library(mapdata)
+library(plyr)
+
+mp=NULL
+mapworld<-borders("usa",colour = "gray50",fill="white") 
+mp<-ggplot()+mapworld+ylim(20,55)
+mp2<-mp+geom_point(aes(x=seeddata$Longitude,y=seeddata$Latitude),color="orange",xlab="Longitude",ylab="Latitude",main="Distribution of Farms")+scale_size(range=c(1,1))
+mp3=mp2+geom_point(aes(x=Evaluation_data$Longitude,y=Evaluation_data$Latitude),color="green",xlab="Longitude",ylab="Latitude",main="Distribution of Farms")+scale_size(range=c(1,1))
+mp4<-mp3+theme(legend.position = "none")
+mp4
+```
+
+```{r}
+m=map("state")
+m_data=seeddata[,c(2,3,10,11,12)]
+number_1=m_data$Median_Temp
+number_2=m_data$Median_Prec
+number_3=m_data$Median_Rad
+
+m_scale_1=(number_3-min(number_3))/(max(number_3)-min(number_3))
+m_color_1=rgb(0,1:12,0,m_scale_1)
+map("state",fill=TRUE,col=m_color_1)
+k1=map("state")+ggplot()+ylim(20,55)
+k2=k1++geom_point(aes(x=seeddata$Longitude,y=seeddata$Latitude),color="orange",xlab="Longitude",ylab="Latitude")+scale_size(range=c(2,2))
+
+lo=m_data$Longitude
+la=m_data$Latitude
+m+ggplot(m_data,aes(x=lo,y=la,fill=number_1))+
+  geom_polygon(colour="grey40")+
+  scale_fill_gradient(low="white",high="red")+
+  coord_map("polyconic")+
+  theme(
+    panel.grid=element_blank(),
+    panel.background=element_blank(),
+    axis.text=element_blank(),
+    axis.ticks=element_blank(),
+    axis.title=element_blank(),
+    legend.position=c(0.2,0.3)
+  )
+
+```
+
+
+
+
+```{r}
+#step2-Frequency Statistics
+
+VarietyData = split(seeddata, seeddata$Variety)
+length(VarietyData) #get 182 varieties in total
+
+library(dplyr)
+a=group_by(seeddata,Variety) %>%count
+a=a[order(a$n, decreasing= T),]
+a=as.data.frame(a)
+a$Variety=as.character(a$Variety)
+
+VarietyData_top10=c()
+VarietyData_top10_name=c()
+for (i in 1:10){
+    VarietyData_top10=c(VarietyData_top10,a[i,2])
+    VarietyData_top10_name=c(VarietyData_top10_name,a[i,1])
+}
+rest_n=sum(a[11:182,2])
+VarietyData_top10=c(VarietyData_top10,rest_n)
+VarietyData_top10_name=c(VarietyData_top10_name,"others")
+
+pie(VarietyData_top10,labels=VarietyData_top10_name)
+a
+
+```
+
+```{r}
+#step 3 Clustering
+
+#combine train set and test set(the only one target farm)
+targetfarm_data=Evaluation_data
+
+GrowingSeason=2011
+Genetics=0
+Variety_Yield=0
+Variety=0
+Variety_Yield=0
+RelativeMaturity=0
+
+targetfarm_data_insert=cbind(GrowingSeason,Genetics,targetfarm_data[,2:4],Variety,Variety_Yield,RelativeMaturity,targetfarm_data[,5:ncol(targetfarm_data)])
+
+targetfarm_data_insert=targetfarm_data_insert[,use_vars]
+
+merge_seeddata_targetfarm=rbind(seeddata,targetfarm_data_insert)
+
+#choose the best k
+position=c("Longitude","Latitude")
+km.out=c()
+for (i in 1:70){
+  
+  set.seed(1)
+  km.out = c(km.out,kmeans(merge_seeddata_targetfarm[,position],i,nstart=30)$tot.withinss)
+  
+}
+km.out=c(0,km.out)
+plot(0:70,km.out)
+
+#cluster(best k is 25)
+set.seed(1)
+km.out_result = kmeans(merge_seeddata_targetfarm[,position],25,nstart=30)
+
+#assign cluster info to the merged dataset and train set,we find target farm belongs to cluster 7.
+cluster=km.out_result$cluster
+merge_seeddata_targetfarm=cbind(merge_seeddata_targetfarm,cluster)
+merge_seeddata_targetfarm[,"cluster"]=factor(merge_seeddata_targetfarm[,"cluster"])
+
+seeddata=merge_seeddata_targetfarm[-34214,]
+
+
+#plot
+#plot(newdata[,position], col=(km.out_result$cluster))
+
+#newdata=as.data.frame(newdata)
+#km.out=as.data.frame(km.out)
+#newdata=cbind(newdata,km.out[1:(length(km.out)-1),])
+```
+
+```{r}
+#step4-yield distribution
+hist(seeddata$Variety_Yield,xlab="Variety_Yield",main="Frequency distribution of soybean yield")
+
+```
+
+
+
+#Part 3-Predictive Analysis
+#step1-Data preprocessing-identify varieties that have enough data and varieties that don't have enough data. threshold is 50.
+```{r}
+MinN = 90
+N = 10000
+limit = 0.025
+VarietyData = split(seeddata, seeddata$Variety)
+length(VarietyData)
+```
+
+```{r}
+#if the rows of a variety is larger than MinN(90), then its data are sufficient enough to build model.
+SufDataVarieties = c()
+insufDataVarieties = c()
+
+for(i in seq(1,length(unique(seeddata$Variety)))){
+   if((dim(VarietyData[[i]])[1])>MinN){
+      SufDataVarieties = c(SufDataVarieties, (as.character(VarietyData[[i]][1,"Variety"])))
+   } else {
+      insufDataVarieties = c(insufDataVarieties, (as.character(VarietyData[[i]][1,"Variety"])))
+   }
+}
+length(SufDataVarieties)
+length(insufDataVarieties)
+```
+
+```{r}
+#build data fram for insufDataVarieties and count rows of the data frame
+InSufVarietyData = data.frame()
+
+
+for (i in 1:length(insufDataVarieties)) {
+  InSufVarietyData = rbind(InSufVarietyData, seeddata[which(seeddata$Variety == insufDataVarieties[i]),])
+}
+
+dim(InSufVarietyData)
+```
+
+```{r}
+#build data fram for sufDataVarieties and count rows of the data frame
+SufVarietyData = data.frame()
+
+for (i in 1:length(SufDataVarieties)) {
+  SufVarietyData = rbind(SufVarietyData, seeddata[which(seeddata$Variety == SufDataVarieties[i]),])
+}
+
+dim(SufVarietyData)
+```
+
+#step2-choose the best model
+(1)OLS-mETHOD1
+```{r}
+MSE=c()
+```
+
+```{r}
+#insufficient data
+set.seed(1)
+train=sample(1:nrow(InSufVarietyData),nrow(InSufVarietyData)*0.7)
+test=-train
+train_set=InSufVarietyData[train,-4]
+test_set=InSufVarietyData[test,-4]
+
+#balance soil type
+level_train_soil=unique(train_set$Soil_Type)
+level_test_soil=unique(test_set$Soil_Type)
+  
+new_level_test_soil=c()
+new_level_train_soil=c()
+
+for(i in level_test_soil){
+    if(!(i%in%level_train_soil)){
+      new_level_test_soil=c(new_level_test_soil,i)
+    }
+  }
+  
+for(i in level_train_soil){
+    if(!(i%in%level_test_soil)){
+      new_level_train_soil=c(new_level_train_soil,i)
+    }
+  }
+
+for (i in 1:length(new_level_test_soil)){
+    add_train=test_set[which(test_set$Soil_Type==new_level_test_soil[i]),]
+    set.seed(1)
+    sam=sample(1:nrow(add_train),1)
+    add_train_final=add_train[sam,]
+    train_set=rbind(train_set,add_train_final)
+    
+  }
+  
+for (i in 1:length(new_level_train_soil)){
+    add_test=train_set[which(train_set$Soil_Type==new_level_train_soil[i]),]
+    set.seed(1)
+    sam=sample(1:nrow(add_test),1)
+    add_test_final=add_test[sam,]
+    test_set=rbind(test_set,add_test_final)
+  }
+
+#balance cluster
+level_train_cluster=unique(train_set$cluster)
+level_test_cluster=unique(test_set$cluster)
+  
+new_level_test_cluster=c()
+new_level_train_cluster=c()
+
+for(i in level_test_cluster){
+    if(!(i%in%level_train_cluster)){
+      new_level_test_cluster=c(new_level_test_cluster,i)
+    }
+  }
+  
+for(i in level_train_cluster){
+    if(!(i%in%level_test_cluster)){
+      new_level_train_cluster=c(new_level_train_cluster,i)
+    }
+  }
+
+for (i in 1:length(new_level_test_cluster)){
+    add_train=test_set[which(test_set$cluster==new_level_test_cluster[i]),]
+    set.seed(1)
+    sam=sample(1:nrow(add_train),1)
+    add_train_final=add_train[sam,]
+    train_set=rbind(train_set,add_train_final)
+    
+  }
+  
+for (i in 1:length(new_level_train_cluster)){
+    add_test=train_set[which(train_set$cluster==new_level_train_cluster[i]),]
+    set.seed(1)
+    sam=sample(1:nrow(add_test),1)
+    add_test_final=add_test[sam,]
+    test_set=rbind(test_set,add_test_final)
+  }
+
+train_set=train_set[complete.cases(train_set),]
+test_set=test_set[complete.cases(test_set),]
+
+lm.fit=lm(Variety_Yield~.,data=train_set)
+
+yield.test=predict(lm.fit,test_set)
+test_mse=mean((test_set$Variety_Yield-yield.test)^2)
+
+
+
+MSE=c(MSE,test_mse)
+MSE
+
+```
+
+```{r}
+#sufficient data
+for (i in 1:length(SufDataVarieties)) {
+  variety_data = seeddata[which(seeddata$Variety == SufDataVarieties[i]),]
+  set.seed(1)
+  train=sample(1:nrow(variety_data),nrow(variety_data)*0.7)
+  test=-train
+  train_set=variety_data[train,-4]
+  test_set=variety_data[test,-4] 
+  
+  #balance soil type
+  level_train_soil=unique(train_set$Soil_Type)
+  level_test_soil=unique(test_set$Soil_Type)
+  
+  new_level_test_soil=c()
+  new_level_train_soil=c()
+
+  for(i in level_test_soil){
+      if(!(i%in%level_train_soil)){
+        new_level_test_soil=c(new_level_test_soil,i)
+      }
+    }
+  
+  for(i in level_train_soil){
+      if(!(i%in%level_test_soil)){
+        new_level_train_soil=c(new_level_train_soil,i)
+      }
+    }
+
+  for (i in 1:length(new_level_test_soil)){
+      add_train=test_set[which(test_set$Soil_Type==new_level_test_soil[i]),]
+      set.seed(1)
+      sam=sample(1:nrow(add_train),1)
+      add_train_final=add_train[sam,]
+      train_set=rbind(train_set,add_train_final)
+    
+    }
+  
+  for (i in 1:length(new_level_train_soil)){
+      add_test=train_set[which(train_set$Soil_Type==new_level_train_soil[i]),]
+      set.seed(1)
+      sam=sample(1:nrow(add_test),1)
+      add_test_final=add_test[sam,]
+      test_set=rbind(test_set,add_test_final)
+    }
+
+  #balance cluster
+  level_train_cluster=unique(train_set$cluster)
+  level_test_cluster=unique(test_set$cluster)
+  
+  new_level_test_cluster=c()
+  new_level_train_cluster=c()
+
+  for(i in level_test_cluster){
+      if(!(i%in%level_train_cluster)){
+        new_level_test_cluster=c(new_level_test_cluster,i)
+      }
+    }
+  
+  for(i in level_train_cluster){
+      if(!(i%in%level_test_cluster)){
+        new_level_train_cluster=c(new_level_train_cluster,i)
+      }
+    }
+
+  for (i in 1:length(new_level_test_cluster)){
+      add_train=test_set[which(test_set$cluster==new_level_test_cluster[i]),]
+      set.seed(1)
+      sam=sample(1:nrow(add_train),1)
+      add_train_final=add_train[sam,]
+      train_set=rbind(train_set,add_train_final)
+    
+    }
+  
+  for (i in 1:length(new_level_train_cluster)){
+      add_test=train_set[which(train_set$cluster==new_level_train_cluster[i]),]
+      set.seed(1)
+      sam=sample(1:nrow(add_test),1)
+      add_test_final=add_test[sam,]
+      test_set=rbind(test_set,add_test_final)
+    }
+
+  train_set=train_set[complete.cases(train_set),]
+  test_set=test_set[complete.cases(test_set),]
+  
+  
+  
+  lm.fit=lm(Variety_Yield~.,data=train_set)
+  
+  #lm.fit$xlevels[["Genetics"]]=union(lm.fit$xlevels[["Genetics"]],levels(test_set$Genetics))
+  #lm.fit$xlevels[["Soil_Type"]]=union(lm.fit$xlevels[["Soil_Type"]],levels(test_set$Soil_Type))
+  #lm.fit$xlevels[["RelativeMaturity"]]=union(lm.fit$xlevels[["RelativeMaturity"]],levels(test_set$RelativeMaturity))
+  #lm.fit$xlevels[["cluster"]]=union(lm.fit$xlevels[["cluster"]],levels(test_set$cluster))
+  
+  yield.test=predict(lm.fit,test_set)
+  test_mse=mean((test_set$Variety_Yield-yield.test)^2)
+
+  MSE=c(MSE,test_mse)
+  
+}
+mean(MSE)
+MSE
+
+#plot(MSE)
+#from the plot, we can see that there are 4 outliers which are extremely big, so we need to drop them(the top 4 outlier varieties), as they will influence our mean Test MSE segnificantly.
+#MSE=sort(MSE,decreasing = TRUE)
+#MSE=MSE[20:length(MSE)]
+#mean(MSE)
+```
+
+(1)OLS-mETHOD2
+
+```{r}
+total_data=seeddata
+#soil_type
+SoilData = split(total_data, total_data$Soil_Type)
+length(SoilData)
+
+s=group_by(total_data,Soil_Type)%>%count
+s=s[order(s$n, decreasing= T),]
+s=as.data.frame(s)
+s$Soil_Type=as.character(s$Soil_Type)
+
+Soil_num=c()
+Soil_name=c()
+
+for (i in 1:18){
+    Soil_num=c(Soil_num,s[i,2])
+    Soil_name=c(Soil_name,s[i,1])
+}
+
+k=data.frame()
+for (i in 1:18){
+  m=total_data[which(total_data$Soil_Type == Soil_name[i]),]
+  m$Soil_Type=Soil_num[i]/34213
+  k=rbind(k,m)
+}
+
+#cluster
+clusterData = split(k, total_data$cluster)
+length(clusterData)
+
+l=group_by(k,cluster)%>%count
+l=l[order(l$n, decreasing= T),]
+l=as.data.frame(l)
+l$cluster=as.character(l$cluster)
+
+cluster_num=c()
+cluster_name=c()
+
+for (i in 1:25){
+    cluster_num=c(cluster_num,l[i,2])
+    cluster_name=c(cluster_name,l[i,1])
+}
+
+h=data.frame()
+for (i in 1:25){
+  m=k[which(k$cluster == cluster_name[i]),]
+  m$cluster=cluster_num[i]/34213
+  h=rbind(h,m)
+}
+```
+
+```{r}
+MinN = 90
+N = 10000
+limit = 0.025
+VarietyData_ols = split(h, h$Variety)
+length(VarietyData_ols)
+```
+
+
+```{r}
+SufDataVarieties_ols = c()
+insufDataVarieties_ols = c()
+
+for(i in seq(1,182)){
+   if((dim(VarietyData_ols[[i]])[1])>MinN){
+      SufDataVarieties_ols = c(SufDataVarieties_ols, (as.character(VarietyData_ols[[i]][1,"Variety"])))
+   } else {
+      insufDataVarieties_ols = c(insufDataVarieties_ols, (as.character(VarietyData_ols[[i]][1,"Variety"])))
+   }
+}
+
+length(SufDataVarieties_ols)
+length(insufDataVarieties_ols)
+```
+
+
+```{r}
+#build data fram for insufDataVarieties and count rows of the data frame
+InSufVarietyData_ols = data.frame()
+
+
+for (i in 1:length(insufDataVarieties_ols)) {
+  InSufVarietyData_ols = rbind(InSufVarietyData_ols, h[which(h$Variety == insufDataVarieties_ols[i]),])
+}
+
+dim(InSufVarietyData_ols)
+```
+
+```{r}
+#build data fram for sufDataVarieties and count rows of the data frame
+SufVarietyData_ols = data.frame()
+
+for (i in 1:length(SufDataVarieties_ols)) {
+  SufVarietyData_ols = rbind(SufVarietyData_ols, h[which(h$Variety == SufDataVarieties_ols[i]),])
+}
+
+dim(SufVarietyData_ols)
+```
+
+```{r}
+MSE=c()
+```
+
+```{r}
+#insufficient data
+set.seed(1)
+train=sample(1:nrow(InSufVarietyData_ols),nrow(InSufVarietyData_ols)*0.7)
+test=-train
+train_set=InSufVarietyData_ols[train,-4]
+test_set=InSufVarietyData_ols[test,-4]
+
+lm.fit=lm(Variety_Yield~.,data=train_set)
+yield.test=predict(lm.fit,test_set)
+test_mse=mean((test_set$Variety_Yield-yield.test)^2)
+MSE=c(MSE,test_mse)
+MSE
+```
+
+```{r}
+#sufficient data
+for (i in 1:length(SufDataVarieties_ols)) {
+  variety_data = h[which(h$Variety == SufDataVarieties_ols[i]),]
+  set.seed(1)
+  train=sample(1:nrow(variety_data),nrow(variety_data)*0.7)
+  test=-train
+  train_set=variety_data[train,-4]
+  test_set=variety_data[test,-4] 
+  
+  lm.fit = lm(Variety_Yield~.,data=train_set)
+  yield.test = predict(lm.fit,newdata = test_set)
+  test_mse=mean((test_set$Variety_Yield-yield.test)^2)
+
+  MSE=c(MSE,test_mse)
+  
+}
+
+MSE
+mean(MSE)
+
+plot(MSE)
+#from the plot, we can see that there are 8 outliers which are extremely big, so we need to drop them(the top 8 outlier varieties), as they will influence our mean Test MSE segnificantly.
+MSE=sort(MSE,decreasing = TRUE)
+MSE=MSE[9:length(MSE)]
+mean(MSE)
+```
+
+
+
+(2)Random Forest
+```{r}
+library(ISLR)
+library(randomForest)
+library(gbm)
+```
+
+```{r}
+MSE=c()
+
+```
+
+
+```{r}
+#insufficient data
+set.seed(1)
+train=sample(1:nrow(InSufVarietyData),nrow(InSufVarietyData)*0.7)
+test=-train
+train_set=InSufVarietyData[train,-4]
+test_set=InSufVarietyData[test,-4]
+
+
+
+rf.fit = randomForest(Variety_Yield~.,data=train_set,mtry=i,ntree=500,importance = TRUE)
+yield.test = predict(rf.fit,newdata = test_set)
+min_mse=mean((test_set$Variety_Yield-yield.test)^2)
+
+
+MSE=c(MSE,min_mse)
+MSE
+
+#plot(rf.fit)
+
+#varImpPlot(rf.fit)
+#importance(rf.fit)
+
+
+```
+
+```{r}
+#sufficient data
+for (i in 1:length(SufDataVarieties)) {
+  variety_data = seeddata[which(seeddata$Variety == SufDataVarieties[i]),]
+  set.seed(1)
+  train=sample(1:nrow(variety_data),nrow(variety_data)*0.7)
+  test=-train
+  train_set=variety_data[train,-4]
+  test_set=variety_data[test,-4]
+  
+  min_mse=1000000
+
+
+  
+  rf.fit = randomForest(Variety_Yield~.,data=train_set,mtry=i,ntree=500,importance = TRUE)
+  yield.test = predict(rf.fit,newdata = test_set)
+  min_mse=mean((test_set$Variety_Yield-yield.test)^2)
+  
+
+  MSE=c(MSE,min_mse)
+  
+}
+
+MSE
+mean(MSE)
+```
+
+(3)Bagging
+```{r}
+MSE=c()
+```
+
+
+```{r}
+#insufficient data
+set.seed(1)
+train=sample(1:nrow(InSufVarietyData),nrow(InSufVarietyData)*0.7)
+test=-train
+train_set=InSufVarietyData[train,-4]
+test_set=InSufVarietyData[test,-4]
+
+bag.fit = randomForest(Variety_Yield~.,data=train_set,mtry=23,ntree=500,importance = TRUE)
+yield.test = predict(bag.fit,newdata = test_set)
+test_mse=mean((test_set$Variety_Yield-yield.test)^2)
+
+MSE=c(MSE,test_mse)
+MSE
+
+plot(bag.fit)
+
+varImpPlot(bag.fit)
+importance(bag.fit)
+```
+
+```{r}
+#sufficient data
+for (i in 1:length(SufDataVarieties)) {
+  variety_data = seeddata[which(seeddata$Variety == SufDataVarieties[i]),]
+  set.seed(1)
+  train=sample(1:nrow(variety_data),nrow(variety_data)*0.7)
+  test=-train
+  train_set=variety_data[train,-4]
+  test_set=variety_data[test,-4] 
+  
+  bag.fit = randomForest(Variety_Yield~.,data=train_set,mtry=23,ntree=500)
+  yield.test = predict(bag.fit,newdata = test_set)
+  test_mse=mean((test_set$Variety_Yield-yield.test)^2)
+
+  MSE=c(MSE,test_mse)
+}
+
+MSE
+mean(MSE)
+```
+
+(4)Boosting
+```{r}
+MSE=c()
+```
+
+```{r}
+#insufficient data
+set.seed(1)
+train=sample(1:nrow(InSufVarietyData),nrow(InSufVarietyData)*0.7)
+test=-train
+train_set=InSufVarietyData[train,-4]
+test_set=InSufVarietyData[test,-4]
+
+c_shrinkage=c(0.1,0.01,0.001,0.0001)
+min_mse=1000000
+
+
+for(i in c_shrinkage){
+  boost.fit = gbm(Variety_Yield~.,data=train_set,distribution="gaussian",n.trees=1000,interaction.depth=4,shrinkage=i)
+  yield.test = predict(boost.fit,newdata = test_set,n.trees=1000)
+  tm=mean((test_set$Variety_Yield-yield.test)^2)
+  if(tm<=min_mse){
+    min_mse=tm
+  }
+}
+
+
+MSE=c(MSE,min_mse)
+MSE
+
+```
+
+```{r}
+#sufficient data
+for (i in 1:length(SufDataVarieties)) {
+  variety_data = seeddata[which(seeddata$Variety == SufDataVarieties[i]),]
+  set.seed(1)
+  train=sample(1:nrow(variety_data),nrow(variety_data)*0.7)
+  test=-train
+  train_set=variety_data[train,-4]
+  test_set=variety_data[test,-4] 
+  
+  c_shrinkage=c(0.1,0.01,0.001,0.0001)
+  min_mse=1000000
+
+
+  for(i in c_shrinkage){
+    boost.fit = gbm(Variety_Yield~.,data=train_set,distribution="gaussian",n.trees=1000,interaction.depth=4,shrinkage=i)
+    yield.test = predict(boost.fit,newdata = test_set,n.trees=1000)
+    tm=mean((test_set$Variety_Yield-yield.test)^2)
+    if(tm<=min_mse){
+      min_mse=tm
+    }
+  
+  }
+  MSE=c(MSE,min_mse)
+}
+
+SufDataVarieties
+mean(MSE)
+MSE
+```
+
+(5)LASSO
+```{r}
+library(ISLR)
+library(glmnet)
+```
+
+
+```{r}
+MSE=c()
+```
+
+```{r}
+#insufficient data
+set.seed(1)
+train=sample(1:nrow(InSufVarietyData),nrow(InSufVarietyData)*0.7)
+test=-train
+
+x=model.matrix(Variety_Yield~.,InSufVarietyData[,-4])[,-1]
+y=InSufVarietyData$Variety_Yield
+grid=10^seq(10,-2, length =100)
+
+lasso.fit=glmnet(x[train,],y[train],alpha=1, lambda =grid)
+cv.out=cv.glmnet(x[train,],y[train],alpha=1)
+bestlam =cv.out$lambda.min
+yield.test=predict(lasso.fit,s=bestlam,newx=x[test,])
+test_mse=mean((InSufVarietyData$Variety_Yield[test]-yield.test)^2)
+
+MSE=c(MSE,test_mse)
+MSE
+
+#out=glmnet (x,y,alpha=1, lambda=grid)
+#lasso.coef=predict(out,type="coefficients",s=bestlam)[1:46,]
+#lasso.coef[lasso.coef!=0]
+```
+
+```{r}
+#sufficient data
+for (i in 1:length(SufDataVarieties)) {
+  variety_data = seeddata[which(seeddata$Variety == SufDataVarieties[i]),]
+  set.seed(1)
+  train=sample(1:nrow(variety_data),nrow(variety_data)*0.7)
+  test=-train
+  
+  set.seed(1)
+  x=model.matrix(Variety_Yield~.,variety_data[,-4])[,-1]
+  y=variety_data$Variety_Yield
+  grid=10^seq(10,-2, length =100)
+
+  lasso.fit=glmnet(x[train,],y[train],alpha=1, lambda =grid)
+  cv.out=cv.glmnet(x[train,],y[train],alpha=1)
+  bestlam =cv.out$lambda.min
+  yield.test=predict(lasso.fit,s=bestlam,newx=x[test,])
+  test_mse=mean((variety_data$Variety_Yield[test]-yield.test)^2)
+
+  MSE=c(MSE,test_mse)
+}
+
+plot(MSE)
+#from the plot, we can see that there are 6 outliers which are extremely big, so we need to drop them(the top 6 outlier varieties), as they will influence our mean Test MSE segnificantly.
+MSE=sort(MSE,decreasing = TRUE)
+MSE=MSE[7:length(MSE)]
+mean(MSE)
+```
+
+(6)Regression Tree
+```{r}
+library(tree)
+```
+
+```{r}
+MSE=c()
+```
+
+```{r}
+#insufficient data
+set.seed(1)
+train=sample(1:nrow(InSufVarietyData),nrow(InSufVarietyData)*0.7)
+test=-train
+train_set=InSufVarietyData[train,-4]
+test_set=InSufVarietyData[test,-4]
+
+tree.fit = tree(Variety_Yield~.,data=train_set)
+cv.fit=cv.tree(tree.fit)
+plot(cv.fit$size,cv.fit$dev,type='b')
+cv.fit$size
+cv.fit$dev
+
+
+c_dev=1000000e+100000000000
+c_size=0
+
+for(i in 1:(length(cv.fit$dev)-1)){
+  if(cv.fit$dev[i]<=c_dev){
+    c_dev=cv.fit$dev[i]
+    c_size=cv.fit$size[i]
+    
+  }
+}
+c_size
+prune.fit=prune.tree(tree.fit,best=c_size)
+
+yield.test = predict(prune.fit,newdata = test_set)
+test_mse=mean((test_set$Variety_Yield-yield.test)^2)
+
+MSE=c(MSE,test_mse)
+MSE
+
+```
+
+```{r}
+#sufficient data
+for (i in 1:length(SufDataVarieties)) {
+  variety_data = seeddata[which(seeddata$Variety == SufDataVarieties[i]),]
+  set.seed(1)
+  train=sample(1:nrow(variety_data),nrow(variety_data)*0.7)
+  test=-train
+  train_set=variety_data[train,-4]
+  test_set=variety_data[test,-4] 
+  
+  tree.fit = tree(Variety_Yield~.,data=train_set)
+  cv.fit=cv.tree(tree.fit)
+  c_dev=1000000e+100000000000
+  c_size=0
+  
+  for(i in 1:(length(cv.fit$dev)-1)){
+    if(cv.fit$dev[i]<=c_dev){
+      c_dev=cv.fit$dev[i]
+      c_size=cv.fit$size[i]
+    
+    }
+  }
+  
+  prune.fit=prune.tree(tree.fit,best=c_size)
+  
+  yield.test = predict(prune.fit,newdata = test_set)
+  test_mse=mean((test_set$Variety_Yield-yield.test)^2)
+
+  MSE=c(MSE,test_mse)
+}
+
+MSE
+mean(MSE)
+```
+
+
+
+#Part4-Prescriptive Part-use the best model(Random Forest) we choose in Part3 to make predictions for target farm under different weather partterns.
+step1-build evaluation set
+```{r}
+#the data set "merge_seeddata_targetfarm" we build in previous part contains all the data in train set and evaluation set . In this data set, we can find the target farm is in cluster7.
+
+#build validation set
+cluster_7_all=merge_seeddata_targetfarm[which(merge_seeddata_targetfarm$cluster==7),]
+for (i in 1:3){
+  cluster_7_all[,i]=cluster_7_all[nrow(cluster_7_all),i]
+}
+for (i in 5:9){
+  cluster_7_all[,i]=cluster_7_all[nrow(cluster_7_all),i]
+}
+
+for (i in 13:ncol(cluster_7_all)){
+  cluster_7_all[,i]=cluster_7_all[nrow(cluster_7_all),i]
+}
+```
+
+
+step2-make predictions for each variety under different weather patterns--mean&variance
+
+```{r}
+#sufficient variety
+sufficient_data=c(SufDataVarieties)
+insufficient_data=c(insufDataVarieties)
+variety_info=c(sufficient_data,insufficient_data)
+mean_yield=c()
+var_yield=c()
+variety_1=c()
+
+for (i in 1:length(SufDataVarieties)) {
+  variety_data = seeddata[which(seeddata$Variety == SufDataVarieties[i]),]
+  set.seed(1)
+  train=sample(1:nrow(variety_data),0.7*nrow(variety_data))
+  test=-train
+  train_set=variety_data[train,-4]
+  test_set=variety_data[test,-4]
+  evaluation_set=cluster_7_all[,-4]
+  
+  variety_1=c(variety_1,SufDataVarieties[i])
+  
+  set.seed(1)
+  
+  c_shrinkage=c(0.1,0.01,0.001,0.0001)
+  min_mse=10000000000
+  n_shrinkage=0
+
+  for(i in c_shrinkage){
+    boost.fit = gbm(Variety_Yield~.,data=train_set,distribution="gaussian",n.trees=1000,interaction.depth=4,shrinkage=i)
+    yield.test = predict(boost.fit,newdata = test_set,n.trees=1000)
+    tm=mean((test_set$Variety_Yield-yield.test)^2)
+    if(tm<=min_mse){
+      min_mse=tm
+      n_shrinkage=i
+    }
+  
+  }
+  boost.fit_1 = gbm(Variety_Yield~.,data=train_set,distribution="gaussian",n.trees=1000,interaction.depth=4,shrinkage=n_shrinkage)
+  pred.yield=predict(boost.fit_1,evaluation_set)
+  
+  
+  m_yield=mean(pred.yield)
+  v_yield=var(pred.yield)
+  
+  mean_yield=c(mean_yield,m_yield)
+  var_yield=c(var_yield,v_yield)
+}
+
+mean_yield
+var_yield
+variety_1
+```
+
+```{r}
+#insufficient variety
+
+set.seed(1)
+train=sample(1:nrow(InSufVarietyData),nrow(InSufVarietyData)*0.7)
+test=-train
+train_set=InSufVarietyData[train,-4]
+test_set=InSufVarietyData[test,-4]
+evaluation_set=cluster_7_all[,-4]
+  
+set.seed(1)
+  
+c_shrinkage=c(0.1,0.01,0.001,0.0001)
+min_mse=10000000000
+n_shrinkage=0
+
+for(i in c_shrinkage){
+  boost.fit = gbm(Variety_Yield~.,data=train_set,distribution="gaussian",n.trees=1000,interaction.depth=4,shrinkage=i)
+  yield.test = predict(boost.fit,newdata = test_set,n.trees=1000)
+  tm=mean((test_set$Variety_Yield-yield.test)^2)
+  if(tm<=min_mse){
+    min_mse=tm
+    n_shrinkage=i
+  }
+  
+}
+boost.fit_1 = gbm(Variety_Yield~.,data=train_set,distribution="gaussian",n.trees=1000,interaction.depth=4,shrinkage=n_shrinkage)
+pred.yield=predict(boost.fit_1,evaluation_set)
+  
+  
+m_yield=mean(pred.yield)
+v_yield=var(pred.yield)
+  
+mean_yield=c(mean_yield,m_yield)
+var_yield=c(var_yield,v_yield)
+variety_1=c(variety_1,"inSuf")
+
+
+m_yield
+v_yield
+variety_1
+```
+
+```{r}
+near_7 = split(cluster_7_all[-1329,], cluster_7_all[-1329,]$Variety)
+length(near_7) #get 182 varieties in total
+
+library(dplyr)
+e=group_by(cluster_7_all[-1329,],Variety) %>%count
+e=e[order(e$n, decreasing= T),]
+e=as.data.frame(e)
+e$Variety=as.character(e$Variety)
+
+near_top10=c()
+near_top10_name=c()
+for (i in 1:10){
+    near_top10=c(near_top10,e[i,2])
+    near_top10_name=c(near_top10_name,e[i,1])
+}
+near_n=sum(e[11:96,2])
+near_top10=c(near_top10,near_n)
+near_top10_name=c(near_top10_name,"others")
+
+pie(near_top10,labels=near_top10_name)
+e
+```
+
+```{r}
+plot(seeddata$cluster,seeddata$Median_Temp,xlab="cluster",ylab="Median_Temp")
+plot(seeddata$cluster,seeddata$Median_Prec,xlab="cluster",ylab="Median_Prec")
+plot(seeddata$cluster,seeddata$Median_Rad,xlab="cluster",ylab="Median_Rad")
+```
+
+
+
